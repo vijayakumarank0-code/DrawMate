@@ -3,13 +3,13 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image, ImageOps
 from gtts import gTTS
-import tempfile
 from streamlit_drawable_canvas import st_canvas
+import tempfile
 
 
-# --------------------------------------------------
-# PAGE
-# --------------------------------------------------
+# ==============================
+# PAGE SETTINGS
+# ==============================
 
 st.set_page_config(
     page_title="DrawMate",
@@ -21,14 +21,14 @@ st.title("🎨 DrawMate")
 st.subheader("AI-Powered Smart Drawing Assistant")
 
 st.write(
-    "Draw directly on the screen and let DrawMate "
+    "Draw a picture directly below and let DrawMate "
     "understand your drawing! ✏️"
 )
 
 
-# --------------------------------------------------
-# LOAD AI MODEL
-# --------------------------------------------------
+# ==============================
+# LOAD MODEL
+# ==============================
 
 @st.cache_resource
 def load_model():
@@ -40,14 +40,14 @@ def load_model():
 try:
     model = load_model()
 except Exception as e:
-    st.error("❌ AI model could not be loaded.")
+    st.error("❌ Could not load the AI model.")
     st.code(str(e))
     st.stop()
 
 
-# --------------------------------------------------
-# CATEGORIES
-# --------------------------------------------------
+# ==============================
+# MODEL CLASSES
+# ==============================
 
 categories = [
     "house",
@@ -58,9 +58,24 @@ categories = [
 ]
 
 
-# --------------------------------------------------
-# MULTILINGUAL GUIDANCE
-# --------------------------------------------------
+# ==============================
+# LANGUAGE
+# ==============================
+
+language = st.selectbox(
+    "🌐 Choose your language",
+    [
+        "English",
+        "Tamil",
+        "Malayalam",
+        "Hindi"
+    ]
+)
+
+
+# ==============================
+# GUIDANCE
+# ==============================
 
 feedback = {
 
@@ -88,7 +103,6 @@ feedback = {
         "Finally, add clouds, mountains or a landscape."
     },
 
-
     "Tamil": {
 
         "house":
@@ -113,7 +127,6 @@ feedback = {
         "இறுதியாக மேகங்கள், மலைகள் அல்லது இயற்கைக் காட்சியை சேர்க்கலாம்."
     },
 
-
     "Malayalam": {
 
         "house":
@@ -137,7 +150,6 @@ feedback = {
         "കിരണങ്ങൾ വ്യത്യസ്ത നീളത്തിൽ വരയ്ക്കുക. "
         "അവസാനം മേഘങ്ങളും മലകളും പ്രകൃതി ദൃശ്യങ്ങളും ചേർക്കാം."
     },
-
 
     "Hindi": {
 
@@ -165,19 +177,9 @@ feedback = {
 }
 
 
-# --------------------------------------------------
-# LANGUAGE
-# --------------------------------------------------
-
-language = st.selectbox(
-    "🌐 Choose your language",
-    ["English", "Tamil", "Malayalam", "Hindi"]
-)
-
-
-# --------------------------------------------------
+# ==============================
 # DRAWING CANVAS
-# --------------------------------------------------
+# ==============================
 
 st.write("### ✏️ Draw here")
 
@@ -190,13 +192,17 @@ canvas_result = st_canvas(
     width=600,
     drawing_mode="freedraw",
     display_toolbar=True,
+
+    # IMPORTANT FOR NEW VERSION
+    return_image_data=True,
+
     key="drawmate_canvas"
 )
 
 
-# --------------------------------------------------
-# CHECK BUTTON
-# --------------------------------------------------
+# ==============================
+# CHECK DRAWING
+# ==============================
 
 if st.button("🔍 Check My Drawing"):
 
@@ -208,10 +214,10 @@ if st.button("🔍 Check My Drawing"):
 
     else:
 
-        # Get canvas image
+        # Get drawing
         image_array = canvas_result.image_data
 
-        # Convert RGBA → grayscale
+        # Convert to PIL
         image = Image.fromarray(
             image_array.astype("uint8")
         ).convert("L")
@@ -219,7 +225,7 @@ if st.button("🔍 Check My Drawing"):
         # Improve contrast
         image = ImageOps.autocontrast(image)
 
-        # Resize to model input
+        # Resize
         image = image.resize(
             (64, 64),
             Image.Resampling.LANCZOS
@@ -228,13 +234,13 @@ if st.button("🔍 Check My Drawing"):
         # Convert to numpy
         arr = np.array(image)
 
-        # Invert drawing
+        # Invert
         arr = 255 - arr
 
         # Normalize
         arr = arr.astype("float32") / 255.0
 
-        # Model input
+        # CNN input
         arr = arr.reshape(
             1,
             64,
@@ -242,9 +248,9 @@ if st.button("🔍 Check My Drawing"):
             1
         )
 
-        # --------------------------------------------------
+        # ==============================
         # AI PREDICTION
-        # --------------------------------------------------
+        # ==============================
 
         prediction = model.predict(
             arr,
@@ -264,9 +270,9 @@ if st.button("🔍 Check My Drawing"):
         )
 
 
-        # --------------------------------------------------
+        # ==============================
         # RESULT
-        # --------------------------------------------------
+        # ==============================
 
         st.divider()
 
@@ -286,18 +292,18 @@ if st.button("🔍 Check My Drawing"):
                 f"**{confidence:.2f}%**"
             )
 
-            st.write("### 💡 DrawMate says:")
-
             guidance = feedback[
                 language
             ][predicted_class]
 
+            st.write("### 💡 DrawMate says:")
+
             st.info(guidance)
 
 
-            # --------------------------------------------------
+            # ==============================
             # VOICE
-            # --------------------------------------------------
+            # ==============================
 
             try:
 
@@ -348,7 +354,7 @@ if st.button("🔍 Check My Drawing"):
 
             st.warning(
                 "🤔 I can currently understand only "
-                "**House, Tree, or Sun**. "
+                "House, Tree, or Sun. "
                 "Please try drawing one of these! "
                 "🏠 🌳 ☀️"
             )
