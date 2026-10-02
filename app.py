@@ -4,10 +4,11 @@ import numpy as np
 from PIL import Image, ImageOps
 from gtts import gTTS
 import tempfile
+from streamlit_drawable_canvas import st_canvas
 
 
 # --------------------------------------------------
-# PAGE SETTINGS
+# PAGE
 # --------------------------------------------------
 
 st.set_page_config(
@@ -16,33 +17,30 @@ st.set_page_config(
     layout="centered"
 )
 
-
-# --------------------------------------------------
-# TITLE
-# --------------------------------------------------
-
 st.title("🎨 DrawMate")
 st.subheader("AI-Powered Smart Drawing Assistant")
 
 st.write(
-    "DrawMate helps children learn drawing through simple "
-    "AI guidance and friendly feedback."
+    "Draw directly on the screen and let DrawMate "
+    "understand your drawing! ✏️"
 )
 
 
 # --------------------------------------------------
-# LOAD MODEL
+# LOAD AI MODEL
 # --------------------------------------------------
 
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model("DrawMate_final_model.keras")
+    return tf.keras.models.load_model(
+        "DrawMate_final_model.keras"
+    )
 
 
 try:
     model = load_model()
 except Exception as e:
-    st.error("❌ Could not load the AI model.")
+    st.error("❌ AI model could not be loaded.")
     st.code(str(e))
     st.stop()
 
@@ -178,174 +176,179 @@ language = st.selectbox(
 
 
 # --------------------------------------------------
-# IMAGE UPLOAD
+# DRAWING CANVAS
 # --------------------------------------------------
 
-st.write("### ✏️ Upload your drawing")
+st.write("### ✏️ Draw here")
 
-uploaded_file = st.file_uploader(
-    "Choose your drawing",
-    type=["png", "jpg", "jpeg"]
+canvas_result = st_canvas(
+    fill_color="rgba(255, 255, 255, 0)",
+    stroke_width=5,
+    stroke_color="#000000",
+    background_color="#FFFFFF",
+    height=450,
+    width=600,
+    drawing_mode="freedraw",
+    display_toolbar=True,
+    key="drawmate_canvas"
 )
 
 
 # --------------------------------------------------
-# PREDICTION
+# CHECK BUTTON
 # --------------------------------------------------
 
-if uploaded_file is not None:
+if st.button("🔍 Check My Drawing"):
 
-    try:
+    if canvas_result.image_data is None:
 
-        image = Image.open(uploaded_file).convert("L")
-
-        st.image(
-            image,
-            caption="Your drawing",
-            width="stretch"
+        st.warning(
+            "✏️ Please draw something first!"
         )
 
-        if st.button("🔍 Check My Drawing"):
+    else:
 
-            # Improve contrast
-            image = ImageOps.autocontrast(image)
+        # Get canvas image
+        image_array = canvas_result.image_data
 
-            # Resize
-            image = image.resize(
-                (64, 64),
-                Image.Resampling.LANCZOS
+        # Convert RGBA → grayscale
+        image = Image.fromarray(
+            image_array.astype("uint8")
+        ).convert("L")
+
+        # Improve contrast
+        image = ImageOps.autocontrast(image)
+
+        # Resize to model input
+        image = image.resize(
+            (64, 64),
+            Image.Resampling.LANCZOS
+        )
+
+        # Convert to numpy
+        arr = np.array(image)
+
+        # Invert drawing
+        arr = 255 - arr
+
+        # Normalize
+        arr = arr.astype("float32") / 255.0
+
+        # Model input
+        arr = arr.reshape(
+            1,
+            64,
+            64,
+            1
+        )
+
+        # --------------------------------------------------
+        # AI PREDICTION
+        # --------------------------------------------------
+
+        prediction = model.predict(
+            arr,
+            verbose=0
+        )[0]
+
+        predicted_index = int(
+            np.argmax(prediction)
+        )
+
+        predicted_class = categories[
+            predicted_index
+        ]
+
+        confidence = float(
+            prediction[predicted_index] * 100
+        )
+
+
+        # --------------------------------------------------
+        # RESULT
+        # --------------------------------------------------
+
+        st.divider()
+
+        if predicted_class in [
+            "house",
+            "tree",
+            "sun"
+        ]:
+
+            st.success(
+                f"🎨 I think you drew a "
+                f"**{predicted_class.upper()}**!"
             )
 
-            # Convert to numpy
-            arr = np.array(image)
-
-            # Invert image
-            arr = 255 - arr
-
-            # Normalize
-            arr = arr.astype("float32") / 255.0
-
-            # Add dimensions
-            arr = arr.reshape(
-                1,
-                64,
-                64,
-                1
+            st.write(
+                f"🤖 AI confidence: "
+                f"**{confidence:.2f}%**"
             )
 
-            # AI prediction
-            prediction = model.predict(
-                arr,
-                verbose=0
-            )[0]
+            st.write("### 💡 DrawMate says:")
 
-            predicted_index = int(
-                np.argmax(prediction)
-            )
+            guidance = feedback[
+                language
+            ][predicted_class]
 
-            predicted_class = categories[
-                predicted_index
-            ]
-
-            confidence = float(
-                prediction[predicted_index] * 100
-            )
+            st.info(guidance)
 
 
             # --------------------------------------------------
-            # RESULT
+            # VOICE
             # --------------------------------------------------
 
-            st.divider()
+            try:
 
-            if predicted_class in [
-                "house",
-                "tree",
-                "sun"
-            ]:
+                language_codes = {
+                    "English": "en",
+                    "Tamil": "ta",
+                    "Malayalam": "ml",
+                    "Hindi": "hi"
+                }
 
-                st.success(
-                    f"🎨 I think you drew a "
-                    f"**{predicted_class.upper()}**!"
-                )
+                lang_code = language_codes[
+                    language
+                ]
+
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=".mp3"
+                ) as audio_file:
+
+                    tts = gTTS(
+                        text=guidance,
+                        lang=lang_code
+                    )
+
+                    tts.save(
+                        audio_file.name
+                    )
+
+                    audio_path = audio_file.name
 
                 st.write(
-                    f"🤖 AI confidence: "
-                    f"**{confidence:.2f}%**"
+                    "### 🔊 Listen to DrawMate"
                 )
 
-                st.write("### 💡 DrawMate says:")
+                st.audio(
+                    audio_path,
+                    format="audio/mp3"
+                )
 
-                guidance = feedback[
-                    language
-                ][predicted_class]
-
-                st.info(guidance)
-
-
-                # --------------------------------------------------
-                # VOICE
-                # --------------------------------------------------
-
-                try:
-
-                    language_codes = {
-                        "English": "en",
-                        "Tamil": "ta",
-                        "Malayalam": "ml",
-                        "Hindi": "hi"
-                    }
-
-                    lang_code = language_codes[
-                        language
-                    ]
-
-                    voice_text = guidance
-
-                    with tempfile.NamedTemporaryFile(
-                        delete=False,
-                        suffix=".mp3"
-                    ) as audio_file:
-
-                        tts = gTTS(
-                            text=voice_text,
-                            lang=lang_code
-                        )
-
-                        tts.save(
-                            audio_file.name
-                        )
-
-                        audio_path = audio_file.name
-
-                    st.write("### 🔊 Listen to DrawMate")
-
-                    st.audio(
-                        audio_path,
-                        format="audio/mp3"
-                    )
-
-                except Exception:
-
-                    st.warning(
-                        "Voice guidance is temporarily unavailable."
-                    )
-
-
-            else:
+            except Exception:
 
                 st.warning(
-                    "🤔 I can currently understand only "
-                    "**House, Tree, or Sun**. "
-                    "Please try drawing one of these! "
-                    "🏠 🌳 ☀️"
+                    "Voice guidance is temporarily unavailable."
                 )
 
-    except Exception as e:
 
-        st.error(
-            "❌ Something went wrong while processing "
-            "the drawing."
-        )
+        else:
 
-        st.code(str(e))
+            st.warning(
+                "🤔 I can currently understand only "
+                "**House, Tree, or Sun**. "
+                "Please try drawing one of these! "
+                "🏠 🌳 ☀️"
+            )
