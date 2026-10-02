@@ -23,7 +23,7 @@ model = load_model()
 
 categories = ["house", "tree", "sun", "car", "flower"]
 
-guidance = {}
+guidance = {
     "English": {
         "house": "Great job! You drew a house. First, draw a square for the main part. Next, add a triangle for the roof. Then add a door and two windows. Keep drawing and be creative!",
         "tree": "Wonderful! You drew a tree. First, draw the trunk. Next, add branches. Then draw the leafy crown. You can add grass, flowers, or birds!",
