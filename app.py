@@ -191,9 +191,7 @@ canvas_result = st_canvas(
     height=450,
     width=600,
     drawing_mode="freedraw",
-    display_toolbar=True,
-
-    # IMPORTANT FOR NEW VERSION
+ # IMPORTANT FOR NEW VERSION
     return_image_data=True,
 
     key="drawmate_canvas"
